@@ -1,0 +1,207 @@
+ /*Procedimiento 1: Este procedimiento sirve para insertar una transacción en la tabla Transacciones y 
+      actualiza la información de la tarjeta. */
+
+DELIMITER //
+DROP PROCEDURE sp_registrar_transaccion
+DELIMITER //
+CREATE PROCEDURE sp_registrar_transaccion(
+    IN p_idTarjeta INT,
+    IN p_fecha_consumo DATE,
+    IN p_fecha_operacion DATE,
+    IN p_descripcion VARCHAR(200),
+    IN p_monto DECIMAL(10,2),
+    IN p_tipo VARCHAR(10)  # 'debito' o 'credito'
+)
+BEGIN
+    DECLARE v_credito_disponible DECIMAL(10,2);
+    DECLARE v_idResumen INT;
+    
+    # Verificar el saldo disponible de la tarjeta
+    SELECT credito_disponible INTO v_credito_disponible
+    FROM Tarjeta WHERE idTarjeta = p_idTarjeta;
+    
+    # Obtener el ID del resumen de tarjeta más reciente
+    SELECT idResumen_Tarjeta INTO v_idResumen
+    FROM Resumen_Tarjeta
+    WHERE idTarjeta = p_idTarjeta
+    ORDER BY idResumen_Tarjeta DESC
+    LIMIT 1;
+
+    IF p_tipo = 'debito' THEN
+        # Verificar si hay saldo suficiente para la transacción
+        IF v_credito_disponible >= p_monto THEN
+            INSERT INTO Transacciones (fecha_consumo, fecha_operacion, descripcion_transaccion, monto_debito, monto_credito, idTarjeta)
+            VALUES (p_fecha_consumo, p_fecha_operacion, p_descripcion, p_monto, 0.00, p_idTarjeta);
+            
+            # Actualizar el crédito disponible
+            UPDATE Tarjeta 
+            SET credito_disponible = credito_disponible - p_monto
+            WHERE idTarjeta = p_idTarjeta;
+
+            # Actualizar el resumen de tarjeta
+            UPDATE resumen_tarjeta 
+            SET saldo_anterior = saldo_actual, 
+                saldo_actual = saldo_actual - p_monto,
+                nuevas_compras = nuevas_compras + p_monto
+            WHERE idResumen_Tarjeta = v_idResumen;
+        END IF;
+        
+    ELSEIF p_tipo = 'credito' THEN
+        INSERT INTO Transacciones (fecha_consumo, fecha_operacion, descripcion_transaccion, monto_debito, monto_credito, idTarjeta)
+        VALUES (p_fecha_consumo, p_fecha_operacion, p_descripcion, 0.00, p_monto, p_idTarjeta);
+        
+        # Actualizar el saldo de la tarjeta
+        UPDATE Tarjeta 
+        SET credito_disponible = credito_disponible + p_monto
+        WHERE idTarjeta = p_idTarjeta;
+        
+        # Actualizar el resumen de tarjeta
+        UPDATE Resumen_Tarjeta 
+        SET saldo_anterior = saldo_actual, 
+            saldo_actual = saldo_actual + p_monto,
+            pagos_total = pagos_total + p_monto
+        WHERE idResumen_Tarjeta = v_idResumen;
+    END IF;
+END;
+
+ #Sentencias de ejecucion 
+/*
+Ejemplo de uso: 
+Caso 1: Compra de un celular (débito)
+-Se registra una compra de $17000 en la tarjeta 1.
+-Si la tarjeta tiene saldo suficiente, se resta el monto del crédito disponible.
+*/
+CALL sp_registrar_transaccion(1, '2024-03-10', '2024-03-11', 'Compra de Celular', 17000.00, 'debito');
+
+/*
+Caso 2: Abono a la tarjeta (crédito)
+-Se registra un abono de $5000 a la tarjeta 2.
+-Se suma al crédito disponible.
+*/
+CALL sp_registrar_transaccion(3, '2024-03-12', '2024-03-13', 'Abono a tarjeta', 5000.00, 'credito');
+
+# Consultas para visualizar los cambios en las tablas
+select * from transacciones;
+select * from tarjeta;
+select * from resumen_tarjeta;
+
+/* Procedimiento 2: estos son 2 procedimientos que sirven para una cosa el primero sirve para registrar
+los puntos que gana una tarjeta cuando hace compras, el segundo procedimiento sirve para cuando
+el cliente quiera canjear esos puntos.
+*/
+
+DELIMITER //
+DROP PROCEDURE sp_registrar_puntos;
+DELIMITER //
+CREATE PROCEDURE sp_registrar_puntos(
+    IN p_idTarjeta INT,
+    IN p_monto DECIMAL(10,2)  #Monto de la compra que se hizo
+)
+BEGIN
+    #Declaración de variables
+    DECLARE v_saldo_anterior DECIMAL(10,2);
+    DECLARE v_puntos_ganados DECIMAL(10,2);
+    DECLARE v_puntos_disponibles DECIMAL(10,2);
+
+    #Obtener el saldo anterior de puntos
+    SELECT puntos_disponibles INTO v_saldo_anterior
+    FROM Puntos
+    WHERE idTarjeta = p_idTarjeta
+    ORDER BY idPuntos DESC
+    LIMIT 1;
+
+    #Si no hay registros previos se asume que el saldo es 0
+    IF v_saldo_anterior IS NULL THEN
+        SET v_saldo_anterior = 0;
+    END IF;
+
+     #Calcular los puntos ganados (ejemplo: 10% del monto de la compra)
+    SET v_puntos_ganados = p_monto * 0.10;  
+
+    #Calcular los puntos disponibles despues de la compra
+    SET v_puntos_disponibles = v_saldo_anterior + v_puntos_ganados;
+
+    #Insertar el registro de puntos
+    INSERT INTO Puntos (saldo_anterior_puntos, puntos_ganados, puntos_canjeados, puntos_disponibles, idTarjeta)
+    VALUES (v_saldo_anterior, v_puntos_ganados, 0, v_puntos_disponibles, p_idTarjeta);
+END;
+
+#sentencia de ejecucion del procedimiento
+#Aqui se registra una compra de 500 de la tarjeta 1, acabara ganando 50 puntos
+CALL sp_registrar_puntos(1, 500.00);
+
+
+#consultas para visualizar el cambio en las tabla
+select * from puntos;
+
+
+#Procedimiento que va enlazado con el anterior pero en este caso es si el cliente quiere canjear puntos
+DELIMITER //
+DROP PROCEDURE sp_canjear_puntos;
+DELIMITER //
+CREATE PROCEDURE sp_canjear_puntos(
+    IN p_idTarjeta INT,
+    IN p_puntos_canjeados DECIMAL(10,2)
+)
+BEGIN
+     #Declaración de variables
+    DECLARE v_saldo_anterior DECIMAL(10,2);
+    DECLARE v_puntos_disponibles DECIMAL(10,2);
+
+     #Obtener el saldo anterior de puntos (último registro de la tarjeta)
+    SELECT puntos_disponibles INTO v_saldo_anterior
+    FROM Puntos
+    WHERE idTarjeta = p_idTarjeta
+    ORDER BY idPuntos DESC
+    LIMIT 1;
+
+     #Si no hay registros previos asumir saldo 0
+    IF v_saldo_anterior IS NULL THEN
+        SET v_saldo_anterior = 0;
+    END IF;
+
+     #Verificar si hay suficientes puntos antes de restarlos
+    IF v_saldo_anterior >= p_puntos_canjeados THEN
+        #Calcular los puntos disponibles después del canje
+        SET v_puntos_disponibles = v_saldo_anterior - p_puntos_canjeados;
+
+        #Insertar el registro del canje en la tabla Puntos
+        INSERT INTO Puntos (saldo_anterior_puntos, puntos_ganados, puntos_canjeados, puntos_disponibles, idTarjeta)
+        VALUES (v_saldo_anterior, 0, p_puntos_canjeados, v_puntos_disponibles, p_idTarjeta);
+    END IF;
+END;
+#Sentencia de ejecucion para canjear 40 puntos de la tarjeta 1
+CALL sp_canjear_puntos(1, 40.00);
+
+#Consulta para ver los cambios en la tabla puntos
+select * from puntos;
+
+
+#Procedimiento 3: Sirve para aumentarle el limite de credito a una tarjeta
+DELIMITER //
+DROP PROCEDURE sp_actualizar_limite_credito
+DELIMITER //
+CREATE PROCEDURE sp_actualizar_limite_credito(
+    IN p_idTarjeta INT,
+    IN p_nuevo_limite DECIMAL(10,2)
+)
+BEGIN
+     #Declaracion de variable para almacenar el limite de credito anterior
+    DECLARE v_limite_anterior DECIMAL(10,2);
+
+    #Obtener el límite de crédito actual de la tarjeta antes de la actualización
+    SELECT limite_credito INTO v_limite_anterior
+    FROM Tarjeta
+    WHERE idTarjeta = p_idTarjeta;
+
+    #Actualizar el límite de crédito de la tarjeta
+    UPDATE Tarjeta
+    SET limite_credito = p_nuevo_limite
+    WHERE idTarjeta = p_idTarjeta;
+END;
+
+# sentencia para actualizar el limite de credito para la tarjeta 1
+CALL sp_actualizar_limite_credito(1, 60000.00);
+
+# Consulta para visualizar el cambio en la tabla
+select * from tarjeta;

@@ -1,0 +1,104 @@
+CREATE SCHEMA IF NOT EXISTS `estado_cuentadb` DEFAULT CHARACTER SET utf8;
+
+CREATE TABLE IF NOT EXISTS `estado_cuentadb`.`Cliente` (
+  `idCliente` INT(11) NOT NULL AUTO_INCREMENT,
+  `nombre` VARCHAR(45) NULL DEFAULT NULL,
+  `identidad` VARCHAR(45) NULL DEFAULT NULL,
+  `direccion` VARCHAR(45) NULL DEFAULT NULL,
+  `telefono` VARCHAR(45) NULL DEFAULT NULL,
+  `correo` VARCHAR(45) NULL DEFAULT NULL,
+  `fecha_registro` DATE NULL DEFAULT NULL,
+  PRIMARY KEY (`idCliente`)
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8;
+
+CREATE TABLE IF NOT EXISTS `estado_cuentadb`.`Tarjeta` (
+  `idTarjeta` INT(11) NOT NULL AUTO_INCREMENT,
+  `nombre_tarjeta` VARCHAR(45) NULL DEFAULT NULL,
+  `tipo` VARCHAR(45) NULL DEFAULT NULL,
+  `fecha_emision` DATE NULL DEFAULT NULL,
+  `limite_credito` DECIMAL(10,2) NULL DEFAULT NULL,
+  `credito_disponible` DECIMAL(10,2) NULL DEFAULT NULL,
+  `tasa_interes_mensual` DECIMAL(10,2) NULL DEFAULT NULL,
+  `tasa_interes_anual` DECIMAL(10,2) NULL DEFAULT NULL,
+  `saldo_financiamiento` DECIMAL(10,2) NULL DEFAULT NULL,
+  `extra_financiamiento_disponible` DECIMAL(10,2) NULL DEFAULT NULL,
+  `idCliente` INT(11) NOT NULL,
+  PRIMARY KEY (`idTarjeta`),
+  INDEX `fk_Tarjeta_Cliente1_idx` (`idCliente` ASC),
+  CONSTRAINT `fk_Tarjeta_Cliente1`
+    FOREIGN KEY (`idCliente`)
+    REFERENCES `estado_cuentadb`.`Cliente` (`idCliente`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8;
+
+CREATE TABLE IF NOT EXISTS `estado_cuentadb`.`Transacciones` (
+  `idTransacciones` INT(11) NOT NULL AUTO_INCREMENT,
+  `fecha_consumo` DATE NULL DEFAULT NULL,
+  `fecha_operacion` DATE NULL DEFAULT NULL,
+  `descripcion_transaccion` VARCHAR(200) NULL DEFAULT NULL,
+  `monto_debito` DECIMAL(10,2) NULL DEFAULT NULL,
+  `monto_credito` DECIMAL(10,2) NULL DEFAULT NULL,
+  `idTarjeta` INT(11) NOT NULL,
+  PRIMARY KEY (`idTransacciones`),
+  INDEX `fk_Transacciones_Tarjeta1_idx` (`idTarjeta` ASC),
+  CONSTRAINT `fk_Transacciones_Tarjeta1`
+    FOREIGN KEY (`idTarjeta`)
+    REFERENCES `estado_cuentadb`.`Tarjeta` (`idTarjeta`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8;
+
+CREATE TABLE IF NOT EXISTS `estado_cuentadb`.`Pagos` (
+  `idPagos` INT(11) NOT NULL AUTO_INCREMENT,
+  `pago_contado` DECIMAL(10,2) NULL DEFAULT NULL,
+  `pago_minimo` DECIMAL(10,2) NULL DEFAULT NULL,
+  `fecha_limite_pago` DATE NULL DEFAULT NULL,
+  `cuotas_vencidas` INT(11) NULL DEFAULT NULL,
+  `cuotas_vencidas_dolares` DECIMAL(10,2) NULL DEFAULT NULL,
+  `idTarjeta` INT(11) NOT NULL,
+  PRIMARY KEY (`idPagos`),
+  INDEX `fk_Pagos_Tarjeta_idx` (`idTarjeta` ASC),
+  CONSTRAINT `fk_Pagos_Tarjeta`
+    FOREIGN KEY (`idTarjeta`)
+    REFERENCES `estado_cuentadb`.`Tarjeta` (`idTarjeta`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8;
+
+CREATE TABLE IF NOT EXISTS `estado_cuentadb`.`Puntos` (
+  `idPuntos` INT(11) NOT NULL AUTO_INCREMENT,
+  `saldo_anterior_puntos` INT(11) NULL DEFAULT NULL,
+  `puntos_ganados` INT(11) NULL DEFAULT NULL,
+  `puntos_canjeados` INT(11) NULL DEFAULT NULL,
+  `puntos_disponibles` INT(11) NULL DEFAULT NULL,
+  `idTarjeta` INT(11) NOT NULL,
+  PRIMARY KEY (`idPuntos`),
+  INDEX `fk_Puntos_Tarjeta1_idx` (`idTarjeta` ASC),
+  CONSTRAINT `fk_Puntos_Tarjeta1`
+    FOREIGN KEY (`idTarjeta`)
+    REFERENCES `estado_cuentadb`.`Tarjeta` (`idTarjeta`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8;
+
+CREATE TABLE IF NOT EXISTS `estado_cuentadb`.`Resumen_tarjeta` (
+  `idResumen_tarjeta` INT(11) NOT NULL AUTO_INCREMENT,
+  `saldo_anterior` DECIMAL(10,2) NULL DEFAULT NULL,
+  `saldo_actual` DECIMAL(10,2) NULL DEFAULT NULL,
+  `pagos_total` DECIMAL(10,2) NULL DEFAULT NULL,
+  `notas_credito` DECIMAL(10,2) NULL DEFAULT NULL,
+  `nuevas_compras` DECIMAL(10,2) NULL DEFAULT NULL,
+  `retiros_efectivo` DECIMAL(10,2) NULL DEFAULT NULL,
+  `cuota_financiamiento` DECIMAL(10,2) NULL DEFAULT NULL,
+  `intereses` DECIMAL(10,2) NULL DEFAULT NULL,
+  `otros_cargos` DECIMAL(10,2) NULL DEFAULT NULL,
+  `idTarjeta` INT(11) NOT NULL,
+  PRIMARY KEY (`idResumen_tarjeta`),
+  INDEX `fk_Resumen_tarjeta_Tarjeta1_idx` (`idTarjeta` ASC),
+  CONSTRAINT `fk_Resumen_tarjeta_Tarjeta1`
+    FOREIGN KEY (`idTarjeta`)
+    REFERENCES `estado_cuentadb`.`Tarjeta` (`idTarjeta`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION
+) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8;
