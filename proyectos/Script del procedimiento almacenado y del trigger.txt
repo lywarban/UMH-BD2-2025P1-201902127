@@ -1,0 +1,82 @@
+DELIMITER //
+DROP PROCEDURE sp_registrar_tarjeta
+DELIMITER //
+CREATE PROCEDURE sp_registrar_tarjeta(
+    IN p_nombre_tarjeta VARCHAR(100),
+    IN p_tipo VARCHAR(50),
+    IN p_fecha_emision DATE,
+    IN p_limite_credito DECIMAL(10,2),
+    IN p_credito_disponible DECIMAL (10,2),
+    IN p_tasa_interes_mensual DECIMAL(5,2),
+    IN p_tasa_interes_anual DECIMAL(5,2),
+    IN p_saldo_financiamiento DECIMAL(10,2),
+    IN p_idcliente INT
+)
+BEGIN
+     #Declaración de variable
+    DECLARE v_cliente_existente INT DEFAULT 0;
+
+     #Verificar si el cliente existe
+    SELECT COUNT(*) INTO v_cliente_existente 
+    FROM Cliente 
+    WHERE idCliente = p_idcliente;
+
+     #Solo insertar los datos si el cliente existe
+    IF v_cliente_existente > 0 THEN
+        INSERT INTO Tarjeta (
+            nombre_tarjeta, tipo, fecha_emision, limite_credito, 
+            credito_disponible, tasa_interes_mensual, tasa_interes_anual, 
+            saldo_financiamiento, idCliente
+        ) VALUES (
+            p_nombre_tarjeta, p_tipo, p_fecha_emision, p_limite_credito, 
+            p_credito_disponible, p_tasa_interes_mensual, p_tasa_interes_anual, 
+            p_saldo_financiamiento, p_idcliente
+        );
+    END IF;
+    
+END;
+
+#Sentencias de ejecucion
+#El cliente 1 inserta una nueva tarjeta de credito
+CALL sp_registrar_tarjeta(
+    'American Express Black', 'Crédito', '2025-03-13', 
+    200000.00, 50000.00, 2.5, 30.0, 1000.00, 1
+);
+
+#El cliente 2 inserta una tarjeta de debito
+CALL sp_registrar_tarjeta(
+    'Visa Debito', 'Débito', '2025-03-13', 0, 
+    10000.00, 1.8, 22.0, 0.00, 2
+);
+
+#Consulta para visulizar la nueva tarjeta agregada
+select * from Tarjeta; 
+
+
+#Tabla que guardara los datos que se inserten en la tabla tarjeta
+CREATE TABLE historial_tarjeta(
+    idlog INT AUTO_INCREMENT, 
+    fecha DATETIME, 
+    tipo_evento VARCHAR(50), 
+    datos_ingresados VARCHAR(5000),
+    PRIMARY KEY(idlog)
+);
+
+#Consulta para visualizar la tabla
+Select * from historial_tarjeta;
+
+#Trigger para guardar los datos que se guardan en la tabla tarjeta
+DELIMITER //
+DROP TRIGGER tgr_log_historial_tarjeta;
+DELIMITER //
+CREATE TRIGGER tgr_log_historial_tarjeta AFTER INSERT ON Tarjeta
+FOR EACH ROW
+BEGIN
+	DECLARE v_datos varchar(5000);
+    set v_datos := concat(NEW.idtarjeta,',', NEW.nombre_tarjeta, ',', NEW.tipo, ',', NEW.fecha_emision, ',',
+						  NEW.limite_credito, ',', NEW.credito_disponible, ',', NEW.tasa_interes_mensual, ',', 
+                          NEW.tasa_interes_anual, ',', NEW.saldo_financiamiento, ',', NEW.idCliente );
+                          
+	insert into historial_tarjeta ( fecha, tipo_evento, datos_ingresados )
+    values ( now(), 'INSERCION DE DATOS', v_datos );
+    END;
